@@ -1,0 +1,39 @@
+services:
+  mongo1:
+    image: mongo:latest
+    container_name: mongo1
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1-data:/data/db # This creates a named volume for persistence
+    healthcheck:
+      test: |
+        mongosh --port 27017 --eval 'db.adminCommand({ping: 1})'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-initiate:
+    image: mongo:latest
+    container_name: mongo-initiate
+    depends_on:
+      mongo1:
+        condition: service_healthy # This is key: waits for mongo1 to be ready
+    networks:
+      - default # Ensures it's on the same network as mongo1
+    # Command to wait for mongo1 and then initiate the replica set
+    # Using 'mongosh' with a JavaScript command
+    command: >
+      mongosh --port 27017 --eval "
+        rs.initiate({
+          _id: 'rs0',
+          members: [
+            { _id: 0, host: 'localhost:27017' }
+          ]
+        }, { force: true });
+      "
+
+volumes:
+  mongo1-data:
